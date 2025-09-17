@@ -79,4 +79,4 @@ def test_xren():
 
 
 if __name__ == '__main__':
-    test_xren()
+    test_ren()
