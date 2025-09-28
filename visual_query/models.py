@@ -251,6 +251,7 @@ class CandidateSelector(nn.Module):
     def __init__(self):
         super(CandidateSelector, self).__init__()
 
+    #choose best object in frame
     def intra_frame_nms(self, object_scores, object_idxs, frame_ids, query_frame_number):
         selected_object_scores = object_scores.clone()
         unique_frame_ids = torch.unique(frame_ids)
@@ -278,6 +279,7 @@ class CandidateSelector(nn.Module):
                 idx -= 1
         return selected_object_scores, selected_object_idxs
     
+    #bidirectional tracking of highest scoring object
     def inter_frame_nms(self, object_scores, object_idxs, frame_ids, nms_threshold=None, nms_window=None):
         selected_object_scores, selected_object_idxs = [], []
 

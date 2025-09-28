@@ -30,10 +30,10 @@ class SimpleBottleTracker:
         query_tensor = self.transforms(query_img).unsqueeze(0).to(device) #4d tensor( [batchsize, channels, height, width]) -> [1, 3, h, w]
         
         with torch.no_grad():
-            query_features = self.ren(query_tensor) #applies len model
-        
-        return query_features[0]  # [num_regions, feature_dim]
-    
+            query_features = self.ren(query_tensor) #applies ren model
+        #sample coordinates from query and select corresponding tokens
+        return query_features[0, 0]  # [num_regions, feature_dim]
+
     def extract_frame_features(self, frame):
         #same as query but for individual frames
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
