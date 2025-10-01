@@ -3,8 +3,8 @@ import cv2
 import numpy as np
 from PIL import Image
 import yaml
-from REN import REN
-import torchvision.transforms as T
+from ren import REN
+import torchvision.transforms as T 
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from matplotlib import patches
@@ -145,7 +145,7 @@ class SimpleBottleTracker:
         return tracking_results
 
 def main():
-    tracker = SimpleBottleTracker('configs/ren_dinov2_vitb8.yaml') #tracker intialization
+    tracker = SimpleBottleTracker('configs/ren_dino_vitb8.yaml') #tracker intialization
     
     #results
     results = tracker.track_bottle(
