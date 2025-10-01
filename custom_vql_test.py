@@ -25,14 +25,72 @@ class SimpleBottleTracker:
             T.ToTensor() #converts PIL image to PyTorch tensor(pixel vals normalized between 0 & 1)
         ])
         
+        # Cache for grid dimensions - will adapt to video aspect ratio
+        self.grid_h = None
+        self.grid_w = None
+        self.use_adaptive_grid = self.config['parameters'].get('use_adaptive_grid', True)  # Enable rectangular grids
+        
+    def _calculate_grid_dimensions(self, num_regions, image_height, image_width):
+        """
+        Calculate actual grid dimensions based on number of regions and image aspect ratio.
+        Supports rectangular grids that match the video's aspect ratio.
+        """
+        if self.grid_h is not None and self.grid_w is not None:
+            return self.grid_h, self.grid_w
+        
+        # Check if using SLIC (non-grid based)
+        if self.config['parameters'].get('use_slic', False):
+            # For SLIC, still use square grid as approximation for visualization
+            self.grid_h = int(np.sqrt(num_regions))
+            self.grid_w = int(np.sqrt(num_regions))
+            print(f"Using SLIC with approximate grid: {self.grid_h}x{self.grid_w}")
+            return self.grid_h, self.grid_w
+        
+        # Method 1: If adaptive grid is disabled, use square grid
+        if not self.use_adaptive_grid:
+            self.grid_h = int(np.sqrt(num_regions))
+            self.grid_w = int(np.sqrt(num_regions))
+            print(f"Using square grid: {self.grid_h}x{self.grid_w}")
+            return self.grid_h, self.grid_w
+        
+        # Method 2: Calculate rectangular grid based on aspect ratio
+        aspect_ratio = image_width / image_height
+        
+        # Find factors of num_regions that best match aspect ratio
+        best_diff = float('inf')
+        best_h, best_w = int(np.sqrt(num_regions)), int(np.sqrt(num_regions))
+        
+        # Try all possible factorizations
+        for h in range(1, num_regions + 1):
+            if num_regions % h == 0:
+                w = num_regions // h
+                grid_aspect = w / h
+                diff = abs(grid_aspect - aspect_ratio)
+                
+                # Prefer factorizations closer to the aspect ratio
+                if diff < best_diff:
+                    best_diff = diff
+                    best_h, best_w = h, w
+        
+        self.grid_h = best_h
+        self.grid_w = best_w
+        
+        grid_aspect = self.grid_w / self.grid_h
+        print(f"Adaptive rectangular grid: {self.grid_h}x{self.grid_w} "
+              f"(grid aspect: {grid_aspect:.2f}, video aspect: {aspect_ratio:.2f})")
+        return self.grid_h, self.grid_w
+        
     def extract_query_features(self, query_image_path):
         query_img = Image.open(query_image_path).convert('RGB') #convert image from brg to rgb
         query_tensor = self.transforms(query_img).unsqueeze(0).to(device) #4d tensor( [batchsize, channels, height, width]) -> [1, 3, h, w]
         
         with torch.no_grad():
             query_features = self.ren(query_tensor) #applies ren model
-        #sample coordinates from query and select corresponding tokens
-        return query_features[0, 0]  # [num_regions, feature_dim]
+            # REN returns [batch_size, num_regions, feature_dim]
+            # Remove batch dimension to get [num_regions, feature_dim]
+            query_features = query_features[0]
+        
+        return query_features  # [num_regions, feature_dim]
 
     def extract_frame_features(self, frame):
         #same as query but for individual frames
@@ -42,8 +100,11 @@ class SimpleBottleTracker:
         
         with torch.no_grad():
             frame_features = self.ren(frame_tensor)
+            # REN returns [batch_size, num_regions, feature_dim]
+            # Remove batch dimension to get [num_regions, feature_dim]
+            frame_features = frame_features[0]
         
-        return frame_features[0] 
+        return frame_features  # [num_regions, feature_dim] 
     
     def find_best_match(self, query_features, frame_features, top_k=5):
         """Find the most similar regions between query and frame"""
@@ -61,6 +122,33 @@ class SimpleBottleTracker:
         top_similarities, top_indices = torch.topk(max_similarities, min(top_k, len(max_similarities)))
         
         return top_similarities, top_indices
+    
+    def region_idx_to_coords(self, region_idx, frame_height, frame_width, num_regions):
+        """
+        Convert region index to pixel coordinates.
+        Now handles non-square grids properly.
+        """
+        grid_h, grid_w = self._calculate_grid_dimensions(num_regions, frame_height, frame_width)
+        
+        # Calculate row and column in the grid
+        row = region_idx // grid_w
+        col = region_idx % grid_w
+        
+        # Calculate region dimensions
+        region_h = frame_height / grid_h
+        region_w = frame_width / grid_w
+        
+        # Calculate center coordinates
+        center_x = int((col + 0.5) * region_w)
+        center_y = int((row + 0.5) * region_h)
+        
+        # Also return bounding box corners
+        x1 = int(col * region_w)
+        y1 = int(row * region_h)
+        x2 = int((col + 1) * region_w)
+        y2 = int((row + 1) * region_h)
+        
+        return center_x, center_y, (x1, y1, x2, y2)
     
     def track_bottle(self, query_image_path, video_path, output_path=None):
         print("Extracting query features...")
@@ -116,17 +204,16 @@ class SimpleBottleTracker:
             # drawing visual
             if best_similarity > 0.5:  #only add circle if greater than 0.5 for sim
                 h, w = frame.shape[:2] #for cur video frame
-                regions_per_row = int(np.sqrt(frame_features.shape[0]))  #takes amount of regions total, square root for per row(assume square grid)
-                #finding location
-                row = best_region_idx // regions_per_row
-                col = best_region_idx % regions_per_row
-
-                #coord grid -> pixel positions in image
-                center_y = int((row + 0.5) * h / regions_per_row) #0.5 for center of specific row, h/per row is = height of each region
-                center_x = int((col + 0.5) * w / regions_per_row) #same logic as above
+                num_regions = frame_features.shape[0]
                 
-                # Draw detection
+                # Use new function to get coordinates - handles non-square grids
+                center_x, center_y, (x1, y1, x2, y2) = self.region_idx_to_coords(
+                    best_region_idx, h, w, num_regions
+                )
+                
+                # Draw detection with both circle and bounding box
                 cv2.circle(frame, (center_x, center_y), 30, (0, 255, 0), 3) #30 for radius, bgr(green), 3 thickness
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2) # Add bounding box
                 cv2.putText(frame, f'Sim: {best_similarity:.3f}', 
                            (center_x - 50, center_y - 40), #text placement left of circle center and up
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2) #.7 is the font sacle
