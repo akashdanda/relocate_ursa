@@ -120,7 +120,7 @@ class SimpleBottleTracker:
             })
             
             # drawing visual
-            if best_similarity > 0.5:  #only add circle if greater than 0.5 for sim
+            if best_similarity > 0.3:  #only add circle if greater than 0.3 for sim
                 h, w = frame.shape[:2] #for cur video frame
                 regions_per_row = int(np.sqrt(frame_features.shape[0]))  #takes amount of regions total, square root for per row(assume square grid)
                 #finding location
