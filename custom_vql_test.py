@@ -145,7 +145,7 @@ class SimpleBottleTracker:
         return tracking_results
 
 def main():
-    tracker = SimpleBottleTracker('configs/ren_dinov2_vitb8.yaml') #tracker intialization
+    tracker = SimpleBottleTracker('configs/ren_dino_vitb8.yaml') #tracker intialization
     
     #results
     results = tracker.track_bottle(
