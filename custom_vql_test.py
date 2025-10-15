@@ -18,6 +18,13 @@ class SimpleBottleTracker:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
         self.ren = REN(self.config)
         
+        # Get checkpoint path from config
+        self.ren_checkpoint = self.config['parameters']['ren_ckpt']
+        print(f"Checkpoint path: {self.ren_checkpoint}")
+        
+        # CRITICAL: Load the trained weights
+        self.load_ren()
+        
         # Image preprocessing Compose multiple transformations at once
         self.transforms = T.Compose([
             T.Resize((self.config['parameters']['image_resolution'], #resize all images to same size based on config 
