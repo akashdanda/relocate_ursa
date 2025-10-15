@@ -32,22 +32,26 @@ class SimpleBottleTracker:
             T.ToTensor() #converts PIL image to PyTorch tensor(pixel vals normalized between 0 & 1)
         ])
     def load_ren(self):
-        """Load REN checkpoint with trained weights"""
         if os.path.exists(self.ren_checkpoint):
             print(f"Loading REN checkpoint from: {self.ren_checkpoint}")
             checkpoint = torch.load(self.ren_checkpoint, map_location=device)
-            
-            # Load the region encoder weights
+        
+        # Debug: Print what's in the checkpoint
+            print(f"Checkpoint keys: {checkpoint.keys()}")
+        
+        # Load the region encoder weights
             self.ren.region_encoder.load_state_dict(checkpoint['region_encoder_state'])
-            
+        
+        # CRITICAL: Move model to device and set to eval mode
+            self.ren.to(device)
+            self.ren.eval()
+        
             ren_epoch = checkpoint.get('epoch', 'unknown')
             ren_iter = checkpoint.get('iter_count', 'unknown')
             print(f'✓ Loaded REN checkpoint: {ren_epoch} epochs, {ren_iter} iterations.')
+            print(f'✓ Model on device: {next(self.ren.parameters()).device}')
         else:
             print(f'ERROR: No REN checkpoint found at: {self.ren_checkpoint}')
-            print(f'Full path: {os.path.abspath(self.ren_checkpoint)}')
-            print('The model will use random weights, which will NOT work properly!')
-            print('Please download or train the checkpoint first.')
             exit()
         
     def extract_query_features(self, query_image_path):
