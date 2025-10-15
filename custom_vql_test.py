@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import yaml
-from REN import REN
+from ren import REN
 import torchvision.transforms as T
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
