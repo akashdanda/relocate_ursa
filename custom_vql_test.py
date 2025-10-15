@@ -8,7 +8,7 @@ import torchvision.transforms as T
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from matplotlib import patches
-
+import os
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class SimpleBottleTracker:
@@ -17,7 +17,7 @@ class SimpleBottleTracker:
         with open(config_path, 'r') as f:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
         self.ren = REN(self.config)
-        
+
         # Get checkpoint path from config
         self.ren_checkpoint = self.config['parameters']['ren_ckpt']
         print(f"Checkpoint path: {self.ren_checkpoint}")
@@ -31,6 +31,24 @@ class SimpleBottleTracker:
                      self.config['parameters']['image_resolution'])), 
             T.ToTensor() #converts PIL image to PyTorch tensor(pixel vals normalized between 0 & 1)
         ])
+    def load_ren(self):
+        """Load REN checkpoint with trained weights"""
+        if os.path.exists(self.ren_checkpoint):
+            print(f"Loading REN checkpoint from: {self.ren_checkpoint}")
+            checkpoint = torch.load(self.ren_checkpoint, map_location=device)
+            
+            # Load the region encoder weights
+            self.ren.region_encoder.load_state_dict(checkpoint['region_encoder_state'])
+            
+            ren_epoch = checkpoint.get('epoch', 'unknown')
+            ren_iter = checkpoint.get('iter_count', 'unknown')
+            print(f'✓ Loaded REN checkpoint: {ren_epoch} epochs, {ren_iter} iterations.')
+        else:
+            print(f'ERROR: No REN checkpoint found at: {self.ren_checkpoint}')
+            print(f'Full path: {os.path.abspath(self.ren_checkpoint)}')
+            print('The model will use random weights, which will NOT work properly!')
+            print('Please download or train the checkpoint first.')
+            exit()
         
     def extract_query_features(self, query_image_path):
         query_img = Image.open(query_image_path).convert('RGB') #convert image from brg to rgb
