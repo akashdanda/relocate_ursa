@@ -13,23 +13,23 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class SimpleBottleTracker:
     def __init__(self, config_path):
-        #load ren model from config.yaml file
+    # Load config
         with open(config_path, 'r') as f:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
+    
+    # Initialize REN (this already loads the checkpoint internally)
         self.ren = REN(self.config)
-
-        # Get checkpoint path from config
-        self.ren_checkpoint = self.config['parameters']['ren_ckpt']
-        print(f"Checkpoint path: {self.ren_checkpoint}")
-        
-        # CRITICAL: Load the trained weights
-        self.load_ren()
-        
-        # Image preprocessing Compose multiple transformations at once
+    
+    # Set to eval mode (just to be safe)
+        self.ren.eval()
+    
+        print("✓ REN model initialized and loaded")
+    
+    # Image preprocessing
         self.transforms = T.Compose([
-            T.Resize((self.config['parameters']['image_resolution'], #resize all images to same size based on config 
-                     self.config['parameters']['image_resolution'])), 
-            T.ToTensor() #converts PIL image to PyTorch tensor(pixel vals normalized between 0 & 1)
+            T.Resize((self.config['parameters']['image_resolution'],
+                 self.config['parameters']['image_resolution'])), 
+            T.ToTensor()
         ])
     def load_ren(self):
         if os.path.exists(self.ren_checkpoint):
